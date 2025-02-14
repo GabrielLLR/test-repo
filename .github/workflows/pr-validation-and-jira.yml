@@ -51,7 +51,7 @@ jobs:
           )
 
           func main() {
-              fmt.Println("🟢 Iniciando validação OpenAPI...")
+              fmt.Println("🟢 Iniciando validação OpenAPI... GABRIEL LINCOLN")
 
               if len(os.Args) < 2 {
                   fmt.Println("❌ Erro: Arquivo não fornecido")
