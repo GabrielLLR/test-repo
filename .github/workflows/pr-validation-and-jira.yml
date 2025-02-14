@@ -4,6 +4,7 @@ on:
   pull_request:
     types:
       - opened
+      - synchronize  # Executa também quando o PR é atualizado
 
 jobs:
   validate-and-jira:
@@ -11,28 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do código com submódulos
+      - name: Checkout do código do PR (com submódulos)
         uses: actions/checkout@v4
         with:
-          submodules: true
-          token: ${{ secrets.GITHUB_TOKEN }}  # Permite clonar submódulos privados
+          ref: ${{ github.event.pull_request.head.ref }}  # Pega a versão exata do PR
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Identidade do Git
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Exibir versão do `swagger.yaml` para debug
+        run: cat swagger.yaml || echo "⚠️ Arquivo não encontrado!"
+
       - name: Corrigir URL do Submódulo para Autenticação
         run: |
           git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
           git submodule sync
+          cd rules && git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/GabrielLLR/rules-repo.git || true
 
-      - name: Atualizar Submódulos
+      - name: Atualizar Submódulos Baseados no PR
         run: |
-          git submodule update --init --recursive
-          git add rules/
-          git commit -m "Atualização automática do submódulo rules" || exit 0
-          git push origin main
+          git submodule deinit -f rules || true
+          rm -rf .git/modules/rules  # Remove versões antigas
+          git submodule update --init --recursive --force
+          git add .gitmodules rules/
+          git commit -m "Correção do submódulo rules" || true
+          git push origin HEAD:${{ github.event.pull_request.head.ref }} || true
 
       - name: Criar Pasta de Scripts e Adicionar `validate.go`
         run: |
@@ -75,13 +84,25 @@ jobs:
           go mod tidy
 
       - name: Rodar PB33F e gerar relatório
-        run: go run scripts/validate.go swagger.yaml > pb33f_report.txt || true
+        run: |
+          if [ -f "swagger.yaml" ]; then
+            go run scripts/validate.go swagger.yaml > pb33f_report.txt
+          else
+            echo "⚠️ Arquivo swagger.yaml não encontrado!"
+            exit 1
+          fi
 
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
 
       - name: Rodar Spectral e gerar relatório
-        run: spectral lint swagger.yaml > spectral_report.txt || true
+        run: |
+          if [ -f "swagger.yaml" ]; then
+            spectral lint swagger.yaml > spectral_report.txt
+          else
+            echo "⚠️ Arquivo swagger.yaml não encontrado!"
+            exit 1
+          fi
 
       - name: Instalar Vale CLI para validação de documentação
         run: |
@@ -89,7 +110,13 @@ jobs:
           vale --version
 
       - name: Rodar Vale CLI e gerar relatório
-        run: vale swagger.yaml > vale_report.txt || true
+        run: |
+          if [ -f "swagger.yaml" ]; then
+            vale swagger.yaml > vale_report.txt
+          else
+            echo "⚠️ Arquivo swagger.yaml não encontrado!"
+            exit 1
+          fi
 
       - name: Upload de Relatórios de Validação no GitHub
         uses: actions/upload-artifact@v4  # Atualizado para v4
@@ -145,12 +172,10 @@ jobs:
         run: |
           ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
           
-          # Obter transições disponíveis para essa tarefa
           TRANSITIONS=$(curl -s -X GET -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
 
-          # Pegar o ID da transição correta com base no status desejado
           TRANSITION_ID=$(echo $TRANSITIONS | jq -r --arg STATUS "$JIRA_ISSUE_STATUS" '.transitions[] | select(.name == $STATUS) | .id')
 
           if [[ -z "$TRANSITION_ID" ]]; then
@@ -158,26 +183,9 @@ jobs:
             exit 1
           fi
 
-          # Aplicar a transição para o status desejado
           curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "{\"transition\": {\"id\": \"$TRANSITION_ID\"}}" \
             "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions"
 
           echo "✅ Status da tarefa atualizado para: $JIRA_ISSUE_STATUS"
-
-      - name: Anexar Relatórios na Task Jira
-        env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USER: ${{ secrets.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        run: |
-          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
-          for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
-            if [[ -f "$FILE" ]]; then
-              curl -X POST -H "X-Atlassian-Token: no-check" \
-                -H "Content-Type: multipart/form-data" \
-                -u "$JIRA_USER:$JIRA_API_TOKEN" \
-                -F "file=@$FILE" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/attachments"
-            fi
-          done
