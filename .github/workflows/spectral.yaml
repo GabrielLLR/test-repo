@@ -1,0 +1,14 @@
+name: Spectral Validation
+
+on:
+  workflow_call:
+
+jobs:
+  spectral:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar Spectral
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Rodar Spectral
+        run: spectral lint swagger.yaml --ruleset rules/spectral_rules.yaml > spectral_report.txt 2>&1 || true

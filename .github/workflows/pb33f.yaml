@@ -1,0 +1,36 @@
+name: Validate PR
+
+on:
+  workflow_call:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório original
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Checkout do código do PR
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Garantir que os Submódulos Estão Atualizados
+        run: git submodule update --init --recursive
+
+      - name: Instalar Dependências do Go
+        run: |
+          go mod init validator || true
+          go mod tidy
+          go get github.com/pb33f/libopenapi
+
+      - name: Rodar PB33F e gerar relatório
+        run: |
+          go run rules/validator.go swagger.yaml > pb33f_report.txt 2>&1 || true
