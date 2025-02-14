@@ -29,52 +29,22 @@ jobs:
             --arg issuetype "$JIRA_ISSUE_TYPE" \
             '{ fields: { project: { key: $project }, summary: $summary, description: $description | fromjson, issuetype: { name: $issuetype } } }')
 
+          echo "$ISSUE_PAYLOAD"
           echo "📝 Criando issue no Jira..."
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
 
-          echo "🔍 Resposta da API do Jira: $RESPONSE"
-          echo "$RESPONSE" | jq .
+          ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key')
 
-          ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key // empty')
-
-          if [[ -z "$ISSUE_KEY" ]]; then
-            echo "❌ Erro ao criar issue no Jira! Resposta completa: $RESPONSE"
+          if [[ "$ISSUE_KEY" == "null" || -z "$ISSUE_KEY" ]]; then
+            echo "❌ Erro ao criar issue no Jira!"
+            echo "Resposta da API: $RESPONSE"
             exit 1
           fi
 
           echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
           echo "✅ Tarefa Jira criada: $ISSUE_KEY"
-
-      - name: Mover Issue para 'Para Desenvolvimento'
-        env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USER: ${{ secrets.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        run: |
-          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
-
-          if [ -z "$ISSUE_KEY" ]; then
-            echo "❌ Nenhuma issue Jira foi criada. Pulando transição."
-            exit 1
-          fi
-
-          echo "🔄 Obtendo transições disponíveis para a issue $ISSUE_KEY..."
-          TRANSITIONS=$(curl -s -X GET -H "Content-Type: application/json" \
-            -u "$JIRA_USER:$JIRA_API_TOKEN" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
-
-          echo "🔄 Possíveis transições: $TRANSITIONS"
-
-          TRANSITION_ID="51" # Substituir se necessário com o ID correto
-
-          TRANSITION_PAYLOAD=$(jq -n --arg transition "$TRANSITION_ID" '{ transition: { id: $transition } }')
-
-          TRANSITION_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
-            -u "$JIRA_USER:$JIRA_API_TOKEN" \
-            --data "$TRANSITION_PAYLOAD" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
-
-          echo "🔄 Resposta da API de Transição: $TRANSITION_RESPONSE"
 
       - name: Anexar Relatórios na Task Jira
         env:
@@ -84,17 +54,20 @@ jobs:
         run: |
           ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
 
-          if [[ -z "$ISSUE_KEY" ]]; then
-            echo "❌ Nenhuma issue Jira foi criada. Pulando anexos."
+          if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "null" ]; then
+            echo "❌ Nenhuma issue Jira foi criada. Pulando upload de arquivos."
             exit 1
           fi
 
+          echo "📂 Anexando relatórios à issue: $ISSUE_KEY"
           for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
             if [[ -f "$FILE" ]]; then
-              echo "📎 Anexando $FILE à issue $ISSUE_KEY..."
               curl -X POST -H "X-Atlassian-Token: no-check" \
                 -H "Content-Type: multipart/form-data" \
                 -u "$JIRA_USER:$JIRA_API_TOKEN" \
                 -F "file=@$FILE" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/attachments"
+            else
+              echo "⚠️ Arquivo não encontrado: $FILE"
             fi
           done
+          echo "✅ Todos os relatórios foram anexados com sucesso!"
