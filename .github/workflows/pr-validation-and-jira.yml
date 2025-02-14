@@ -35,9 +35,8 @@ jobs:
       - name: Garantir Permissões de Leitura no `swagger.yaml`
         run: chmod +r swagger.yaml || true
 
-      - name: Criar Pasta de Scripts e Adicionar `validate.go`
+      - name: Criar `validate.go` na raiz
         run: |
-          mkdir -p scripts
           echo 'package main
 
           import (
@@ -47,64 +46,69 @@ jobs:
           )
 
           func main() {
+              fmt.Println("🟢 Iniciando validação OpenAPI...")
+
               if len(os.Args) < 2 {
-                  fmt.Println("Uso: go run validate.go <swagger.yaml>")
-                  return
+                  fmt.Println("❌ Erro: Arquivo não fornecido")
+                  os.Exit(1)
               }
 
               file := os.Args[1]
+              fmt.Println("📂 Arquivo recebido:", file)
+
               data, err := os.ReadFile(file)
               if err != nil {
-                  fmt.Println("Erro ao ler o arquivo:", err)
+                  fmt.Println("❌ Erro ao ler o arquivo:", err)
                   os.Exit(1)
               }
+
+              fmt.Println("📖 Arquivo lido com sucesso!")
 
               doc, err := libopenapi.NewDocument(data)
               if err != nil {
-                  fmt.Println("Erro ao carregar OpenAPI:", err)
+                  fmt.Println("❌ Erro ao carregar OpenAPI:", err)
                   os.Exit(1)
               }
 
-              // Obtém a versão do OpenAPI corretamente
+              fmt.Println("✅ OpenAPI carregado com sucesso!")
+
               info := doc.GetSpecInfo()
               if info == nil {
-                  fmt.Println("Erro: Não foi possível obter informações da especificação OpenAPI")
+                  fmt.Println("❌ Erro: Não foi possível obter informações da especificação OpenAPI")
                   os.Exit(1)
               }
 
               fmt.Println("✅ OpenAPI validado com sucesso! Versão:", info.Version)
-          }' > scripts/validate.go
+          }' > validate.go
 
       - name: Instalar Dependências do Go
         run: |
-          go mod init pb33f-validator || true
+          go mod init validator || true
           go mod tidy
+          go get github.com/pb33f/libopenapi
 
       - name: Rodar PB33F e gerar relatório
         run: |
-          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
-          if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
+          if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
           fi
 
-          echo "✅ Arquivo encontrado: $SWAGGER_FILE"
-          cd $(dirname "$SWAGGER_FILE")  # Entra no diretório do arquivo
-          go run ../../scripts/validate.go "$(basename "$SWAGGER_FILE")" > ../../pb33f_report.txt
+          echo "✅ Arquivo encontrado: swagger.yaml"
+          go run validate.go swagger.yaml > pb33f_report.txt
 
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
 
       - name: Rodar Spectral e gerar relatório
         run: |
-          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
-          if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
+          if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
           fi
 
-          echo "✅ Arquivo encontrado: $SWAGGER_FILE"
-          spectral lint "$SWAGGER_FILE" > spectral_report.txt
+          echo "✅ Arquivo encontrado: swagger.yaml"
+          spectral lint "swagger.yaml" > spectral_report.txt
 
       - name: Instalar Vale CLI para validação de documentação
         run: |
@@ -113,14 +117,13 @@ jobs:
 
       - name: Rodar Vale CLI e gerar relatório
         run: |
-          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
-          if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
+          if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
           fi
 
-          echo "✅ Arquivo encontrado: $SWAGGER_FILE"
-          vale "$SWAGGER_FILE" > vale_report.txt
+          echo "✅ Arquivo encontrado: swagger.yaml"
+          vale "swagger.yaml" > vale_report.txt
 
       - name: Upload de Relatórios de Validação no GitHub
         uses: actions/upload-artifact@v4
