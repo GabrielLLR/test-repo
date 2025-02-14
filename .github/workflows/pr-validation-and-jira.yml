@@ -57,7 +57,8 @@ jobs:
                   os.Exit(1)
               }
 
-              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", doc.Version())
+              // Obtém informações sobre a versão do OpenAPI
+              fmt.Println("✅ OpenAPI validado com sucesso!")
           }' > scripts/validate.go
 
       - name: Instalar Dependências do Go
