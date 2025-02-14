@@ -93,6 +93,13 @@ jobs:
           sudo mv vale /usr/local/bin/
           vale --version
 
+      - name: Garantir que a pasta `rules/styles/` existe
+        run: |
+          if [ ! -d "rules/styles" ]; then
+            echo "⚠️ Criando a pasta rules/styles/ para evitar erro no Vale CLI..."
+            mkdir -p rules/styles
+          fi
+
       - name: Rodar Vale CLI e gerar relatório usando `rules/.vale.ini`
         run: |
           if [ ! -f "swagger.yaml" ]; then
@@ -108,11 +115,53 @@ jobs:
           echo "✅ Arquivo encontrado: swagger.yaml"
           vale --config rules/.vale.ini "swagger.yaml" > vale_report.txt || true
 
-      - name: Upload de Relatórios de Validação no GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-reports
-          path: |
-            pb33f_report.txt
-            spectral_report.txt
-            vale_report.txt
+      - name: Criar Task no Jira
+        id: create-jira-task
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
+          JIRA_ISSUE_TYPE: "Bug"
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          DESCRIPTION="Este ticket foi gerado automaticamente para revisar o PR: $PR_TITLE. \n\n🔗 Link do PR: $PR_URL \n👤 Criado por: $PR_AUTHOR"
+
+          ISSUE_PAYLOAD=$(cat <<EOF
+          {
+            "fields": {
+              "project": { "key": "$JIRA_PROJECT" },
+              "summary": "Revisão do PR: $PR_TITLE",
+              "description": "$DESCRIPTION",
+              "issuetype": { "name": "$JIRA_ISSUE_TYPE" }
+            }
+          }
+          EOF
+          )
+
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
+
+          ISSUE_KEY=$(echo $RESPONSE | jq -r '.key')
+          echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
+          echo "✅ Tarefa Jira criada: $ISSUE_KEY"
+
+      - name: Anexar Relatórios na Task Jira
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
+          for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
+            if [[ -f "$FILE" ]]; then
+              curl -X POST -H "X-Atlassian-Token: no-check" \
+                -H "Content-Type: multipart/form-data" \
+                -u "$JIRA_USER:$JIRA_API_TOKEN" \
+                -F "file=@$FILE" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/attachments"
+            fi
+          done
