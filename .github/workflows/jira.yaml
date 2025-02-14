@@ -20,14 +20,14 @@ jobs:
           PR_URL="${{ github.event.pull_request.html_url }}"
           PR_AUTHOR="${{ github.event.pull_request.user.login }}"
 
-          DESCRIPTION=$(echo "Revisão do PR: $PR_TITLE. Link do PR: $PR_URL Criado por: $PR_AUTHOR" | jq -R .)
+          DESCRIPTION=$(jq -Rs '.' <<< "Revisão do PR: $PR_TITLE. Link do PR: $PR_URL Criado por: $PR_AUTHOR")
 
           ISSUE_PAYLOAD=$(jq -n \
             --arg project "$JIRA_PROJECT" \
             --arg summary "Revisão do PR: $PR_TITLE" \
             --arg description "$DESCRIPTION" \
             --arg issuetype "$JIRA_ISSUE_TYPE" \
-            '{ fields: { project: { key: $project }, summary: $summary, description: $description, issuetype: { name: $issuetype } } }')
+            '{ fields: { project: { key: $project }, summary: $summary, description: $description | fromjson, issuetype: { name: $issuetype } } }')
 
           echo "📝 Criando issue no Jira..."
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
@@ -35,11 +35,12 @@ jobs:
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
 
           echo "🔍 Resposta da API do Jira: $RESPONSE"
+          echo "$RESPONSE" | jq .
 
-          ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key')
+          ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key // empty')
 
-          if [[ "$ISSUE_KEY" == "null" || -z "$ISSUE_KEY" ]]; then
-            echo "❌ Erro ao criar issue no Jira!"
+          if [[ -z "$ISSUE_KEY" ]]; then
+            echo "❌ Erro ao criar issue no Jira! Resposta completa: $RESPONSE"
             exit 1
           fi
 
@@ -59,9 +60,14 @@ jobs:
             exit 1
           fi
 
-          TRANSITION_ID="51" # ID correspondente ao status 'Para Desenvolvimento'
+          echo "🔄 Obtendo transições disponíveis para a issue $ISSUE_KEY..."
+          TRANSITIONS=$(curl -s -X GET -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
 
-          echo "🔄 Movendo issue $ISSUE_KEY para o status correto..."
+          echo "🔄 Possíveis transições: $TRANSITIONS"
+
+          TRANSITION_ID="51" # Substituir se necessário com o ID correto
+
           TRANSITION_PAYLOAD=$(jq -n --arg transition "$TRANSITION_ID" '{ transition: { id: $transition } }')
 
           TRANSITION_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
@@ -77,8 +83,15 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         run: |
           ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
+
+          if [[ -z "$ISSUE_KEY" ]]; then
+            echo "❌ Nenhuma issue Jira foi criada. Pulando anexos."
+            exit 1
+          fi
+
           for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
             if [[ -f "$FILE" ]]; then
+              echo "📎 Anexando $FILE à issue $ISSUE_KEY..."
               curl -X POST -H "X-Atlassian-Token: no-check" \
                 -H "Content-Type: multipart/form-data" \
                 -u "$JIRA_USER:$JIRA_API_TOKEN" \
