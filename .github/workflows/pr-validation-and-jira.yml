@@ -12,12 +12,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do código do PR (com submódulos)
+      - name: Checkout do código do PR
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}  # Pega a versão exata do PR
           fetch-depth: 0
-          submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Identidade do Git
@@ -28,57 +27,39 @@ jobs:
       - name: Exibir versão do `swagger.yaml` para debug
         run: cat swagger.yaml || echo "⚠️ Arquivo não encontrado!"
 
-      - name: Corrigir URL do Submódulo para Autenticação
+      - name: Criar Pasta de Scripts e Adicionar `validate.go`
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git submodule sync
-          cd rules && git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/GabrielLLR/rules-repo.git || true
+          mkdir -p scripts
+          echo 'package main
 
-      - name: Atualizar Submódulos Baseados no PR
-        run: |
-          git submodule deinit -f rules || true
-          rm -rf .git/modules/rules  # Remove versões antigas
-          git submodule update --init --recursive --force
-          git add .gitmodules rules/
-          git commit -m "Correção do submódulo rules" || true
-          git push origin HEAD:${{ github.event.pull_request.head.ref }} || true
+          import (
+              "fmt"
+              "os"
+              "github.com/pb33f/libopenapi"
+          )
 
-          - name: Criar Pasta de Scripts e Adicionar `validate.go`
-          run: |
-            mkdir -p scripts
-            cat <<EOF > scripts/validate.go
-            package main
-            
-            import (
-                "fmt"
-                "os"
-                "github.com/pb33f/libopenapi"
-            )
-            
-            func main() {
-                if len(os.Args) < 2 {
-                    fmt.Println("Uso: go run validate.go swagger.yaml")
-                    return
-                }
-        
-                file := os.Args[1]
-                data, err := os.ReadFile(file)
-                if err != nil {
-                    fmt.Println("Erro ao ler o arquivo:", err)
-                    os.Exit(1)
-                }
-        
-                doc, err := libopenapi.NewDocument(data)
-                if err != nil {
-                    fmt.Println("Erro ao carregar OpenAPI:", err)
-                    os.Exit(1)
-                }
-        
-                // Evita erro de variável não usada
-                fmt.Println("✅ OpenAPI validado com sucesso! Versão:", doc.Version())
-            }
-            EOF
-        
+          func main() {
+              if len(os.Args) < 2 {
+                  fmt.Println("Uso: go run validate.go swagger.yaml")
+                  return
+              }
+
+              file := os.Args[1]
+              data, err := os.ReadFile(file)
+              if err != nil {
+                  fmt.Println("Erro ao ler o arquivo:", err)
+                  os.Exit(1)
+              }
+
+              doc, err := libopenapi.NewDocument(data)
+              if err != nil {
+                  fmt.Println("Erro ao carregar OpenAPI:", err)
+                  os.Exit(1)
+              }
+
+              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", doc.Version())
+          }' > scripts/validate.go
+
       - name: Instalar Dependências do Go
         run: |
           go mod init pb33f-validator || true
@@ -120,7 +101,7 @@ jobs:
           fi
 
       - name: Upload de Relatórios de Validação no GitHub
-        uses: actions/upload-artifact@v4  # Atualizado para v4
+        uses: actions/upload-artifact@v4
         with:
           name: validation-reports
           path: |
