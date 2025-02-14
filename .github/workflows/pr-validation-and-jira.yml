@@ -19,13 +19,14 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configurar Identidade do Git
-        run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
+      - name: Garantir que todos os arquivos do PR foram baixados
+        run: git pull origin ${{ github.event.pull_request.head.ref }}
 
-      - name: Exibir versão do `swagger.yaml` para debug
-        run: cat swagger.yaml || echo "⚠️ Arquivo não encontrado!"
+      - name: Debug - Listar Arquivos no Diretório
+        run: ls -R
+
+      - name: Verificar se `swagger.yaml` existe
+        run: find . -name "swagger.yaml" || echo "⚠️ Arquivo swagger.yaml não encontrado!"
 
       - name: Criar Pasta de Scripts e Adicionar `validate.go`
         run: |
@@ -40,7 +41,7 @@ jobs:
 
           func main() {
               if len(os.Args) < 2 {
-                  fmt.Println("Uso: go run validate.go swagger.yaml")
+                  fmt.Println("Uso: go run validate.go <swagger.yaml>")
                   return
               }
 
@@ -57,8 +58,9 @@ jobs:
                   os.Exit(1)
               }
 
-              // Obtém informações sobre a versão do OpenAPI
-              fmt.Println("✅ OpenAPI validado com sucesso!")
+              // Obtém a versão do OpenAPI corretamente
+              v := doc.GetSpecInfo().Version
+              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", v)
           }' > scripts/validate.go
 
       - name: Instalar Dependências do Go
@@ -68,8 +70,9 @@ jobs:
 
       - name: Rodar PB33F e gerar relatório
         run: |
-          if [ -f "swagger.yaml" ]; then
-            go run scripts/validate.go swagger.yaml > pb33f_report.txt
+          SWAGGER_FILE=$(find . -name "swagger.yaml" | head -n 1)
+          if [ -f "$SWAGGER_FILE" ]; then
+            go run scripts/validate.go "$SWAGGER_FILE" > pb33f_report.txt
           else
             echo "⚠️ Arquivo swagger.yaml não encontrado!"
             exit 1
@@ -80,8 +83,9 @@ jobs:
 
       - name: Rodar Spectral e gerar relatório
         run: |
-          if [ -f "swagger.yaml" ]; then
-            spectral lint swagger.yaml > spectral_report.txt
+          SWAGGER_FILE=$(find . -name "swagger.yaml" | head -n 1)
+          if [ -f "$SWAGGER_FILE" ]; then
+            spectral lint "$SWAGGER_FILE" > spectral_report.txt
           else
             echo "⚠️ Arquivo swagger.yaml não encontrado!"
             exit 1
@@ -94,8 +98,9 @@ jobs:
 
       - name: Rodar Vale CLI e gerar relatório
         run: |
-          if [ -f "swagger.yaml" ]; then
-            vale swagger.yaml > vale_report.txt
+          SWAGGER_FILE=$(find . -name "swagger.yaml" | head -n 1)
+          if [ -f "$SWAGGER_FILE" ]; then
+            vale "$SWAGGER_FILE" > vale_report.txt
           else
             echo "⚠️ Arquivo swagger.yaml não encontrado!"
             exit 1
