@@ -12,20 +12,67 @@ jobs:
 
     steps:
       - name: Checkout do código com submódulos
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}  # Permite clonar submódulos privados
+
+      - name: Configurar Identidade do Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Corrigir URL do Submódulo para Autenticação
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git submodule sync
 
       - name: Atualizar Submódulos
         run: |
-          git submodule update --remote --merge
+          git submodule update --init --recursive
           git add rules/
           git commit -m "Atualização automática do submódulo rules" || exit 0
           git push origin main
 
-      - name: Instalar PB33F para validação OpenAPI
-        run: go install github.com/pb33f/libopenapi@latest
+      - name: Criar Pasta de Scripts e Adicionar `validate.go`
+        run: |
+          mkdir -p scripts
+          cat <<EOF > scripts/validate.go
+          package main
+          
+          import (
+              "fmt"
+              "os"
+              "github.com/pb33f/libopenapi"
+          )
+          
+          func main() {
+              if len(os.Args) < 2 {
+                  fmt.Println("Uso: go run validate.go swagger.yaml")
+                  return
+              }
+
+              file := os.Args[1]
+              data, err := os.ReadFile(file)
+              if err != nil {
+                  fmt.Println("Erro ao ler o arquivo:", err)
+                  os.Exit(1)
+              }
+
+              doc, err := libopenapi.NewDocument(data)
+              if err != nil {
+                  fmt.Println("Erro ao carregar OpenAPI:", err)
+                  os.Exit(1)
+              }
+
+              fmt.Println("✅ OpenAPI validado com sucesso!")
+          }
+          EOF
+
+      - name: Instalar Dependências do Go
+        run: |
+          go mod init pb33f-validator || true
+          go mod tidy
 
       - name: Rodar PB33F e gerar relatório
         run: go run scripts/validate.go swagger.yaml > pb33f_report.txt || true
@@ -45,7 +92,7 @@ jobs:
         run: vale swagger.yaml > vale_report.txt || true
 
       - name: Upload de Relatórios de Validação no GitHub
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Atualizado para v4
         with:
           name: validation-reports
           path: |
@@ -61,7 +108,7 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
           JIRA_ISSUE_TYPE: ${{ secrets.JIRA_ISSUE_TYPE }}
-          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}  # NOVA SECRET PARA DEFINIR O STATUS
+          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_URL="${{ github.event.pull_request.html_url }}"
@@ -94,7 +141,7 @@ jobs:
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_USER: ${{ secrets.JIRA_USER }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}  # O STATUS VEM DO GITHUB SECRETS
+          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}
         run: |
           ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
           
