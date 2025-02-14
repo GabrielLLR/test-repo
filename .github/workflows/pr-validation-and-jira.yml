@@ -78,7 +78,7 @@ jobs:
             exit 1
           fi
 
-          if [ ! -f "rules/spectral-ruleset.yaml" ]; then
+          if [ ! -f "rules/spectral_rules.yaml" ]; then
             echo "❌ Arquivo de regras do Spectral não encontrado!"
             exit 1
           fi
