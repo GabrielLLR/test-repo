@@ -2,39 +2,35 @@ name: Jira Task Creation
 
 on:
   workflow_call:
-    inputs:
+    secrets:
       JIRA_URL:
         required: true
-        type: string
       JIRA_USER:
         required: true
-        type: string
       JIRA_API_TOKEN:
         required: true
-        type: string
       JIRA_PROJECT:
         required: true
-        type: string
 
 jobs:
   jira:
     runs-on: ubuntu-latest
     steps:
-      - name: Validar Inputs Necessários
+      - name: Validar Secrets Necessárias
         run: |
-          if [[ -z "${{ inputs.JIRA_URL }}" || -z "${{ inputs.JIRA_USER }}" || -z "${{ inputs.JIRA_API_TOKEN }}" || -z "${{ inputs.JIRA_PROJECT }}" ]]; then
-            echo "❌ Um ou mais inputs obrigatórios não estão definidos."
+          if [[ -z "${{ secrets.JIRA_URL }}" || -z "${{ secrets.JIRA_USER }}" || -z "${{ secrets.JIRA_API_TOKEN }}" || -z "${{ secrets.JIRA_PROJECT }}" ]]; then
+            echo "❌ Uma ou mais secrets obrigatórias não estão definidas."
             exit 1
           fi
-          echo "✅ Todos os inputs obrigatórios estão definidos."
+          echo "✅ Todas as secrets obrigatórias estão definidas."
 
       - name: Criar Task no Jira
         id: create-jira-task
         env:
-          JIRA_URL: ${{ inputs.JIRA_URL }}
-          JIRA_USER: ${{ inputs.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ inputs.JIRA_API_TOKEN }}
-          JIRA_PROJECT: ${{ inputs.JIRA_PROJECT }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
           JIRA_ISSUE_TYPE: "Task"
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
@@ -56,64 +52,13 @@ jobs:
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
 
-          echo "🔍 Resposta da API do Jira: $RESPONSE"
-          echo "$RESPONSE" | jq .
-
           ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key')
 
           if [[ "$ISSUE_KEY" == "null" || -z "$ISSUE_KEY" ]]; then
             echo "❌ Erro ao criar issue no Jira!"
+            echo "Resposta da API: $RESPONSE"
             exit 1
           fi
 
           echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
           echo "✅ Tarefa Jira criada: $ISSUE_KEY"
-
-      - name: Anexar Relatórios na Task Jira
-        env:
-          JIRA_URL: ${{ inputs.JIRA_URL }}
-          JIRA_USER: ${{ inputs.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ inputs.JIRA_API_TOKEN }}
-        run: |
-          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
-
-          if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "null" ]; then
-            echo "❌ Nenhuma issue Jira foi criada. Pulando upload de arquivos."
-            exit 1
-          fi
-
-          echo "📂 Anexando relatórios à issue: $ISSUE_KEY"
-          for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
-            if [[ -f "$FILE" ]]; then
-              curl -X POST -H "X-Atlassian-Token: no-check" \
-                -H "Content-Type: multipart/form-data" \
-                -u "$JIRA_USER:$JIRA_API_TOKEN" \
-                -F "file=@$FILE" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/attachments"
-            else
-              echo "⚠️ Arquivo não encontrado: $FILE"
-            fi
-          done
-          echo "✅ Todos os relatórios foram anexados com sucesso!"
-
-      - name: Mover Task para 'Em Andamento'
-        env:
-          JIRA_URL: ${{ inputs.JIRA_URL }}
-          JIRA_USER: ${{ inputs.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ inputs.JIRA_API_TOKEN }}
-        run: |
-          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
-          TRANSITION_ID="11"  # ID correspondente ao status 'Em Andamento'
-
-          if [ -z "$ISSUE_KEY" ]; then
-            echo "❌ Nenhuma issue Jira foi criada. Pulando transição."
-            exit 1
-          fi
-
-          echo "🔄 Movendo issue $ISSUE_KEY para 'Em Andamento'..."
-          TRANSITION_PAYLOAD=$(jq -n --arg transition "$TRANSITION_ID" '{ transition: { id: $transition } }')
-
-          TRANSITION_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
-            -u "$JIRA_USER:$JIRA_API_TOKEN" \
-            --data "$TRANSITION_PAYLOAD" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
-
-          echo "🔄 Resposta da API de Transição: $TRANSITION_RESPONSE"
