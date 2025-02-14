@@ -35,7 +35,7 @@ jobs:
       - name: Garantir Permissões de Leitura no `swagger.yaml`
         run: chmod +r swagger.yaml || true
 
-      - name: Criar `validate.go` na raiz
+      - name: Criar `validate.go` na raiz com logs detalhados
         run: |
           echo 'package main
 
@@ -56,6 +56,15 @@ jobs:
               file := os.Args[1]
               fmt.Println("📂 Arquivo recebido:", file)
 
+              // Verifica se o arquivo existe
+              _, err := os.Stat(file)
+              if os.IsNotExist(err) {
+                  fmt.Println("❌ Erro: O arquivo não existe!")
+                  os.Exit(1)
+              }
+
+              // Ler o arquivo
+              fmt.Println("📖 Tentando ler o arquivo...")
               data, err := os.ReadFile(file)
               if err != nil {
                   fmt.Println("❌ Erro ao ler o arquivo:", err)
@@ -64,6 +73,8 @@ jobs:
 
               fmt.Println("📖 Arquivo lido com sucesso!")
 
+              // Carregar o OpenAPI Document
+              fmt.Println("📦 Tentando carregar o documento OpenAPI...")
               doc, err := libopenapi.NewDocument(data)
               if err != nil {
                   fmt.Println("❌ Erro ao carregar OpenAPI:", err)
@@ -72,6 +83,8 @@ jobs:
 
               fmt.Println("✅ OpenAPI carregado com sucesso!")
 
+              // Obtém informações do OpenAPI
+              fmt.Println("🔍 Obtendo informações do OpenAPI...")
               info := doc.GetSpecInfo()
               if info == nil {
                   fmt.Println("❌ Erro: Não foi possível obter informações da especificação OpenAPI")
@@ -87,15 +100,24 @@ jobs:
           go mod tidy
           go get github.com/pb33f/libopenapi
 
-      - name: Rodar PB33F e gerar relatório
+      - name: Rodar PB33F e gerar relatório com logs detalhados
         run: |
+          echo "🔍 Buscando swagger.yaml..."
           if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
           fi
 
           echo "✅ Arquivo encontrado: swagger.yaml"
-          go run validate.go swagger.yaml > pb33f_report.txt
+          echo "🟢 Executando validação PB33F..."
+
+          go run validate.go swagger.yaml > pb33f_report.txt 2>&1 || {
+            echo "❌ Erro ao executar PB33F. Veja detalhes abaixo:"
+            cat pb33f_report.txt
+            exit 1
+          }
+
+          echo "✅ PB33F finalizado com sucesso!"
 
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
