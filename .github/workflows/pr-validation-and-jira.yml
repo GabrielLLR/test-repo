@@ -12,15 +12,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do código do PR (garantindo a versão do PR)
+      - name: Checkout do código do PR (suporte a forks)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}  # Checkout na versão do PR
-          fetch-depth: 0  # Garante que temos histórico completo para comparação
+          repository: ${{ github.event.pull_request.head.repo.full_name }}  # Pega do fork
+          ref: ${{ github.event.pull_request.head.ref }}  # Usa a branch correta do PR
+          fetch-depth: 0  # Baixa todo o histórico
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Garantir que todos os arquivos do PR foram baixados
-        run: git pull origin ${{ github.event.pull_request.head.ref }}
+      - name: Verificar a Branch Atual (Confirma PR)
+        run: git branch --show-current
+
+      - name: Debug - Verificar Alterações no PR
+        run: git diff --name-only HEAD^ HEAD
 
       - name: Debug - Listar Arquivos no Diretório (confirma versão do PR)
         run: ls -R
@@ -46,7 +50,7 @@ jobs:
           )
 
           func main() {
-              fmt.Println("🟢 Iniciando validação OpenAPI... GABRIEL")
+              fmt.Println("🟢 Iniciando validação OpenAPI... Lincoln")
 
               if len(os.Args) < 2 {
                   fmt.Println("❌ Erro: Arquivo não fornecido")
