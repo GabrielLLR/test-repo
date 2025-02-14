@@ -95,15 +95,33 @@ jobs:
           sudo mv vale /usr/local/bin/
           vale --version
 
-      - name: Rodar Vale CLI e gerar relatório
+      - name: Garantir que `rules/.vale.ini` Existe
+        run: |
+          if [ ! -f "rules/.vale.ini" ]; then
+            echo "⚠️ Criando arquivo rules/.vale.ini padrão..."
+            cat <<EOT > rules/.vale.ini
+            StylesPath = rules/styles
+            MinAlertLevel = warning
+
+            [*.{md,txt,yaml}]
+            BasedOnStyles = Vale
+            EOT
+          fi
+
+      - name: Rodar Vale CLI e gerar relatório usando `rules/.vale.ini`
         run: |
           if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
+          if [ ! -f "rules/.vale.ini" ]; then
+            echo "❌ Arquivo de configuração .vale.ini não encontrado!"
+            exit 1
+          fi
+
           echo "✅ Arquivo encontrado: swagger.yaml"
-          vale "swagger.yaml" > vale_report.txt || true
+          vale --config rules/.vale.ini "swagger.yaml" > vale_report.txt || true
 
       - name: Upload de Relatórios de Validação no GitHub
         uses: actions/upload-artifact@v4
