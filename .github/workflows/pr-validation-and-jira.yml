@@ -43,41 +43,42 @@ jobs:
           git commit -m "Correção do submódulo rules" || true
           git push origin HEAD:${{ github.event.pull_request.head.ref }} || true
 
-      - name: Criar Pasta de Scripts e Adicionar `validate.go`
-        run: |
-          mkdir -p scripts
-          cat <<EOF > scripts/validate.go
-          package main
-          
-          import (
-              "fmt"
-              "os"
-              "github.com/pb33f/libopenapi"
-          )
-          
-          func main() {
-              if len(os.Args) < 2 {
-                  fmt.Println("Uso: go run validate.go swagger.yaml")
-                  return
-              }
-
-              file := os.Args[1]
-              data, err := os.ReadFile(file)
-              if err != nil {
-                  fmt.Println("Erro ao ler o arquivo:", err)
-                  os.Exit(1)
-              }
-
-              doc, err := libopenapi.NewDocument(data)
-              if err != nil {
-                  fmt.Println("Erro ao carregar OpenAPI:", err)
-                  os.Exit(1)
-              }
-
-              fmt.Println("✅ OpenAPI validado com sucesso!")
-          }
-          EOF
-
+          - name: Criar Pasta de Scripts e Adicionar `validate.go`
+          run: |
+            mkdir -p scripts
+            cat <<EOF > scripts/validate.go
+            package main
+            
+            import (
+                "fmt"
+                "os"
+                "github.com/pb33f/libopenapi"
+            )
+            
+            func main() {
+                if len(os.Args) < 2 {
+                    fmt.Println("Uso: go run validate.go swagger.yaml")
+                    return
+                }
+        
+                file := os.Args[1]
+                data, err := os.ReadFile(file)
+                if err != nil {
+                    fmt.Println("Erro ao ler o arquivo:", err)
+                    os.Exit(1)
+                }
+        
+                doc, err := libopenapi.NewDocument(data)
+                if err != nil {
+                    fmt.Println("Erro ao carregar OpenAPI:", err)
+                    os.Exit(1)
+                }
+        
+                // Evita erro de variável não usada
+                fmt.Println("✅ OpenAPI validado com sucesso! Versão:", doc.Version())
+            }
+            EOF
+        
       - name: Instalar Dependências do Go
         run: |
           go mod init pb33f-validator || true
