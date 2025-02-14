@@ -58,9 +58,14 @@ jobs:
                   os.Exit(1)
               }
 
-              // Obtém a versão do OpenAPI corretamente
-              v := doc.GetSpecInfo().Version
-              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", v)
+              // Corrigindo acesso à versão do OpenAPI
+              info := doc.GetSpecInfo()
+              if info == nil {
+                  fmt.Println("Erro: Não foi possível obter informações da especificação OpenAPI")
+                  os.Exit(1)
+              }
+
+              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", info.Version)
           }' > scripts/validate.go
 
       - name: Instalar Dependências do Go
