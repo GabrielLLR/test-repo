@@ -1,0 +1,136 @@
+name: Validate PR and Create Jira Task
+
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  validate-and-jira:
+    if: github.repository != 'GabrielLLR/template-repo'  # EVITA EXECUÇÃO NO TEMPLATE
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código com submódulos
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Atualizar Submódulos
+        run: |
+          git submodule update --remote --merge
+          git add rules/
+          git commit -m "Atualização automática do submódulo rules" || exit 0
+          git push origin main
+
+      - name: Instalar PB33F para validação OpenAPI
+        run: go install github.com/pb33f/libopenapi@latest
+
+      - name: Rodar PB33F e gerar relatório
+        run: go run scripts/validate.go swagger.yaml > pb33f_report.txt || true
+
+      - name: Instalar Spectral para validação OpenAPI
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Rodar Spectral e gerar relatório
+        run: spectral lint swagger.yaml > spectral_report.txt || true
+
+      - name: Instalar Vale CLI para validação de documentação
+        run: |
+          curl -fsSL https://install.vale.sh | sh
+          vale --version
+
+      - name: Rodar Vale CLI e gerar relatório
+        run: vale swagger.yaml > vale_report.txt || true
+
+      - name: Upload de Relatórios de Validação no GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: validation-reports
+          path: |
+            pb33f_report.txt
+            spectral_report.txt
+            vale_report.txt
+
+      - name: Criar Task no Jira
+        id: create-jira-task
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
+          JIRA_ISSUE_TYPE: ${{ secrets.JIRA_ISSUE_TYPE }}
+          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}  # NOVA SECRET PARA DEFINIR O STATUS
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          DESCRIPTION="Este ticket foi gerado automaticamente para revisar o PR: $PR_TITLE. \n\n🔗 Link do PR: $PR_URL \n👤 Criado por: $PR_AUTHOR"
+
+          ISSUE_PAYLOAD=$(cat <<EOF
+          {
+            "fields": {
+              "project": { "key": "$JIRA_PROJECT" },
+              "summary": "Revisão do PR: $PR_TITLE",
+              "description": "$DESCRIPTION",
+              "issuetype": { "name": "$JIRA_ISSUE_TYPE" }
+            }
+          }
+          EOF
+          )
+
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
+
+          ISSUE_KEY=$(echo $RESPONSE | jq -r '.key')
+          echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
+          echo "✅ Tarefa Jira criada: $ISSUE_KEY"
+
+      - name: Definir Status da Task no Jira
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_ISSUE_STATUS: ${{ secrets.JIRA_ISSUE_STATUS }}  # O STATUS VEM DO GITHUB SECRETS
+        run: |
+          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
+          
+          # Obter transições disponíveis para essa tarefa
+          TRANSITIONS=$(curl -s -X GET -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
+
+          # Pegar o ID da transição correta com base no status desejado
+          TRANSITION_ID=$(echo $TRANSITIONS | jq -r --arg STATUS "$JIRA_ISSUE_STATUS" '.transitions[] | select(.name == $STATUS) | .id')
+
+          if [[ -z "$TRANSITION_ID" ]]; then
+            echo "⚠️ Nenhuma transição encontrada para o status $JIRA_ISSUE_STATUS"
+            exit 1
+          fi
+
+          # Aplicar a transição para o status desejado
+          curl -s -X POST -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            --data "{\"transition\": {\"id\": \"$TRANSITION_ID\"}}" \
+            "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions"
+
+          echo "✅ Status da tarefa atualizado para: $JIRA_ISSUE_STATUS"
+
+      - name: Anexar Relatórios na Task Jira
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
+          for FILE in pb33f_report.txt spectral_report.txt vale_report.txt; do
+            if [[ -f "$FILE" ]]; then
+              curl -X POST -H "X-Atlassian-Token: no-check" \
+                -H "Content-Type: multipart/form-data" \
+                -u "$JIRA_USER:$JIRA_API_TOKEN" \
+                -F "file=@$FILE" "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/attachments"
+            fi
+          done

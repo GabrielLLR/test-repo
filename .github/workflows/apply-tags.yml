@@ -1,0 +1,28 @@
+name: Apply Version Tag on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  apply-tag:
+    if: github.event.pull_request.merged == true && github.repository != 'GabrielLLR/template-repo'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Garante que todas as tags estão disponíveis
+
+      - name: Extrair versão do Swagger
+        id: get_version
+        run: |
+          VERSION=$(grep 'version:' swagger.yaml | awk '{print $2}')
+          echo "Swagger Version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Criar e aplicar nova tag
+        run: |
+          git tag "v${{ env.VERSION }}"
+          git push origin "v${{ env.VERSION }}"

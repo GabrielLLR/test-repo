@@ -1,0 +1,3 @@
+[submodule "rules"]
+	path = rules
+	url = https://github.com/GabrielLLR/rules-repo.git
