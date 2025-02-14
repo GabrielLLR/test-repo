@@ -1,25 +1,24 @@
 name: Validate PR and Create Jira Task
 
 on:
-  repository_dispatch:
-    types: [trigger_main_workflow]
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 jobs:
   validate-and-jira:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do Código do Repositório Oficial
+      - name: Checkout do Código do PR (suporte a forks)
         uses: actions/checkout@v4
         with:
-          ref: main  # Sempre pega a versão mais recente da main do repositório oficial
+          repository: ${{ github.event.pull_request.head.repo.full_name }}  # Pega do fork
+          ref: ${{ github.event.pull_request.head.ref }}  # Usa a branch correta do PR
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Obter Código do PR Correto
-        run: |
-          git fetch origin pull/${{ github.event.client_payload.pr_branch }}/head:pr_branch
-          git checkout pr_branch
 
       - name: Verificar a Branch Atual (Confirma PR)
         run: git branch --show-current
@@ -51,7 +50,7 @@ jobs:
           )
 
           func main() {
-              fmt.Println("🟢 Iniciando validação OpenAPI...")
+              fmt.Println("🟢 Iniciando validação OpenAPI... GABRIEL LINCOLN")
 
               if len(os.Args) < 2 {
                   fmt.Println("❌ Erro: Arquivo não fornecido")
