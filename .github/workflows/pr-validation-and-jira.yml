@@ -12,17 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do código do PR
+      - name: Checkout do código do PR (garantindo a versão do PR)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}  # Pega a versão exata do PR
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}  # Checkout na versão do PR
+          fetch-depth: 0  # Garante que temos histórico completo para comparação
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Garantir que todos os arquivos do PR foram baixados
         run: git pull origin ${{ github.event.pull_request.head.ref }}
 
-      - name: Debug - Listar Arquivos no Diretório
+      - name: Debug - Listar Arquivos no Diretório (confirma versão do PR)
         run: ls -R
 
       - name: Debug - Exibir Caminho Completo do `swagger.yaml`
@@ -46,7 +46,7 @@ jobs:
           )
 
           func main() {
-              fmt.Println("🟢 Iniciando validação OpenAPI...")
+              fmt.Println("🟢 Iniciando validação OpenAPI... GABRIEL")
 
               if len(os.Args) < 2 {
                   fmt.Println("❌ Erro: Arquivo não fornecido")
@@ -102,9 +102,9 @@ jobs:
 
       - name: Rodar PB33F e gerar relatório com logs detalhados
         run: |
-          echo "🔍 Buscando swagger.yaml..."
+          echo "🔍 Buscando swagger.yaml da versão do PR..."
           if [ ! -f "swagger.yaml" ]; then
-            echo "❌ Arquivo swagger.yaml não encontrado!"
+            echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
@@ -125,7 +125,7 @@ jobs:
       - name: Rodar Spectral e gerar relatório
         run: |
           if [ ! -f "swagger.yaml" ]; then
-            echo "❌ Arquivo swagger.yaml não encontrado!"
+            echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
@@ -140,7 +140,7 @@ jobs:
       - name: Rodar Vale CLI e gerar relatório
         run: |
           if [ ! -f "swagger.yaml" ]; then
-            echo "❌ Arquivo swagger.yaml não encontrado!"
+            echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
