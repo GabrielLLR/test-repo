@@ -111,25 +111,20 @@ jobs:
             exit 1
           fi
 
-          echo "🔄 Obtendo lista de transições disponíveis..."
+          echo "🔄 Movendo a task para 'EM ANDAMENTO'..."
           
           TRANSITIONS=$(curl -s -X GET -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Content-Type: application/json" \
             "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/transitions")
 
-          echo "📋 Transições disponíveis: $TRANSITIONS"
+          TRANSITION_ID=$(echo "$TRANSITIONS" | jq -r '.transitions[] | select(.name=="Em Andamento") | .id')
 
-          TRANSITION_ID=$(echo "$TRANSITIONS" | jq -r '.transitions[] | select(.id=="31") | .id')
-
-          if [ -z "$TRANSITION_ID" ] || [ "$TRANSITION_ID" == "null" ]; then
-            echo "❌ Não foi possível encontrar a transição para 'Em Andamento' (ID: 31)."
+          if [ -z "$TRANSITION_ID" ]; then
+            echo "❌ Não foi possível encontrar a transição para 'Em Andamento'."
             echo "🔍 Resposta da API: $TRANSITIONS"
             exit 1
           fi
 
-          echo "✅ Encontrado ID da transição para 'Em Andamento': $TRANSITION_ID"
-          
-          echo "🔄 Movendo a task para 'EM ANDAMENTO'..."
           curl -s -X POST -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data "{\"transition\": {\"id\": \"$TRANSITION_ID\"}}" \
