@@ -86,9 +86,13 @@ jobs:
 
           echo "✅ Spectral finalizado com sucesso! Erros e warnings foram salvos no relatório."
 
-      - name: Instalar Vale CLI para validação de documentação
+      - name: Instalar Vale CLI para validação de documentação (Método GitHub)
         run: |
-          curl -fsSL https://install.vale.sh | sh
+          echo "🔽 Baixando e instalando Vale CLI..."
+          VALE_VERSION=$(curl -s https://api.github.com/repos/errata-ai/vale/releases/latest | jq -r .tag_name)
+          curl -L -o vale.tar.gz "https://github.com/errata-ai/vale/releases/download/$VALE_VERSION/vale_${VALE_VERSION:1}_Linux_64-bit.tar.gz"
+          tar -xzf vale.tar.gz
+          sudo mv vale /usr/local/bin/
           vale --version
 
       - name: Rodar Vale CLI e gerar relatório
