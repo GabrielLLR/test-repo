@@ -2,26 +2,39 @@ name: Jira Task Creation
 
 on:
   workflow_call:
+    inputs:
+      JIRA_URL:
+        required: true
+        type: string
+      JIRA_USER:
+        required: true
+        type: string
+      JIRA_API_TOKEN:
+        required: true
+        type: string
+      JIRA_PROJECT:
+        required: true
+        type: string
 
 jobs:
   jira:
     runs-on: ubuntu-latest
     steps:
-      - name: Validar Secrets Necessárias
+      - name: Validar Inputs Necessários
         run: |
-          if [[ -z "${{ secrets.JIRA_URL }}" || -z "${{ secrets.JIRA_USER }}" || -z "${{ secrets.JIRA_API_TOKEN }}" || -z "${{ secrets.JIRA_PROJECT }}" ]]; then
-            echo "❌ Uma ou mais secrets obrigatórias não estão definidas."
+          if [[ -z "${{ inputs.JIRA_URL }}" || -z "${{ inputs.JIRA_USER }}" || -z "${{ inputs.JIRA_API_TOKEN }}" || -z "${{ inputs.JIRA_PROJECT }}" ]]; then
+            echo "❌ Um ou mais inputs obrigatórios não estão definidos."
             exit 1
           fi
-          echo "✅ Todas as secrets obrigatórias estão definidas."
+          echo "✅ Todos os inputs obrigatórios estão definidos."
 
       - name: Criar Task no Jira
         id: create-jira-task
         env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USER: ${{ secrets.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
+          JIRA_URL: ${{ inputs.JIRA_URL }}
+          JIRA_USER: ${{ inputs.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ inputs.JIRA_API_TOKEN }}
+          JIRA_PROJECT: ${{ inputs.JIRA_PROJECT }}
           JIRA_ISSUE_TYPE: "Task"
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
@@ -56,9 +69,9 @@ jobs:
 
       - name: Anexar Relatórios na Task Jira
         env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USER: ${{ secrets.JIRA_USER }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_URL: ${{ inputs.JIRA_URL }}
+          JIRA_USER: ${{ inputs.JIRA_USER }}
+          JIRA_API_TOKEN: ${{ inputs.JIRA_API_TOKEN }}
         run: |
           ISSUE_KEY="${{ env.JIRA_ISSUE_KEY }}"
 

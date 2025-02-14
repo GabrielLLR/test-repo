@@ -22,3 +22,9 @@ jobs:
   jira:
     needs: vale
     uses: ./.github/workflows/jira.yaml
+    with:
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_USER: ${{ secrets.JIRA_USER }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
+  
