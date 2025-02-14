@@ -12,22 +12,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do Código do PR (suporte a forks)
+      - name: Checkout do Código do PR (com submódulos)
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}  # Pega do fork
-          ref: ${{ github.event.pull_request.head.ref }}  # Usa a branch correta do PR
+          submodules: true  # Garante que a pasta `rules` seja clonada corretamente
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Garantir que os Submódulos Estão Atualizados
+        run: git submodule update --init --recursive
 
       - name: Verificar a Branch Atual (Confirma PR)
         run: git branch --show-current
 
-      - name: Debug - Verificar Alterações no PR
-        run: git diff --name-only HEAD^ HEAD
-
-      - name: Debug - Listar Arquivos no Diretório (confirma versão do PR)
-        run: ls -R
+      - name: Debug - Listar Arquivos na Pasta `rules`
+        run: ls -R rules/
 
       - name: Debug - Exibir Caminho Completo do `swagger.yaml`
         run: |
@@ -39,83 +38,29 @@ jobs:
       - name: Garantir Permissões de Leitura no `swagger.yaml`
         run: chmod +r swagger.yaml || true
 
-      - name: Criar `validate.go` na raiz com logs detalhados
-        run: |
-          echo 'package main
-
-          import (
-              "fmt"
-              "os"
-              "github.com/pb33f/libopenapi"
-          )
-
-          func main() {
-              fmt.Println("🟢 Iniciando validação OpenAPI... GABRIEL LINCOLN")
-
-              if len(os.Args) < 2 {
-                  fmt.Println("❌ Erro: Arquivo não fornecido")
-                  os.Exit(1)
-              }
-
-              file := os.Args[1]
-              fmt.Println("📂 Arquivo recebido:", file)
-
-              // Verifica se o arquivo existe
-              _, err := os.Stat(file)
-              if os.IsNotExist(err) {
-                  fmt.Println("❌ Erro: O arquivo não existe!")
-                  os.Exit(1)
-              }
-
-              // Ler o arquivo
-              fmt.Println("📖 Tentando ler o arquivo...")
-              data, err := os.ReadFile(file)
-              if err != nil {
-                  fmt.Println("❌ Erro ao ler o arquivo:", err)
-                  os.Exit(1)
-              }
-
-              fmt.Println("📖 Arquivo lido com sucesso!")
-
-              // Carregar o OpenAPI Document
-              fmt.Println("📦 Tentando carregar o documento OpenAPI...")
-              doc, err := libopenapi.NewDocument(data)
-              if err != nil {
-                  fmt.Println("❌ Erro ao carregar OpenAPI:", err)
-                  os.Exit(1)
-              }
-
-              fmt.Println("✅ OpenAPI carregado com sucesso!")
-
-              // Obtém informações do OpenAPI
-              fmt.Println("🔍 Obtendo informações do OpenAPI...")
-              info := doc.GetSpecInfo()
-              if info == nil {
-                  fmt.Println("❌ Erro: Não foi possível obter informações da especificação OpenAPI")
-                  os.Exit(1)
-              }
-
-              fmt.Println("✅ OpenAPI validado com sucesso! Versão:", info.Version)
-          }' > validate.go
-
       - name: Instalar Dependências do Go
         run: |
           go mod init validator || true
           go mod tidy
           go get github.com/pb33f/libopenapi
 
-      - name: Rodar PB33F e gerar relatório com logs detalhados
+      - name: Rodar PB33F e gerar relatório usando `rules/validator.go`
         run: |
-          echo "🔍 Buscando swagger.yaml da versão do PR..."
+          echo "🔍 Buscando swagger.yaml..."
           if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
+            exit 1
+          fi
+
+          if [ ! -f "rules/validator.go" ]; then
+            echo "❌ Arquivo validator.go não encontrado em rules/!"
             exit 1
           fi
 
           echo "✅ Arquivo encontrado: swagger.yaml"
           echo "🟢 Executando validação PB33F..."
 
-          go run validate.go swagger.yaml > pb33f_report.txt 2>&1 || {
+          go run rules/validator.go swagger.yaml > pb33f_report.txt 2>&1 || {
             echo "❌ Erro ao executar PB33F. Veja detalhes abaixo:"
             cat pb33f_report.txt
             exit 1
@@ -126,15 +71,20 @@ jobs:
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
 
-      - name: Rodar Spectral e gerar relatório (usando ruleset `spectral:oas`)
+      - name: Rodar Spectral e gerar relatório usando `rules/spectral-ruleset.yaml`
         run: |
           if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
+          if [ ! -f "rules/spectral-ruleset.yaml" ]; then
+            echo "❌ Arquivo de regras do Spectral não encontrado!"
+            exit 1
+          fi
+
           echo "✅ Arquivo encontrado: swagger.yaml"
-          spectral lint swagger.yaml --ruleset spectral:oas > spectral_report.txt || {
+          spectral lint swagger.yaml --ruleset rules/spectral-ruleset.yaml > spectral_report.txt || {
             echo "❌ Erro ao executar Spectral. Veja detalhes abaixo:"
             cat spectral_report.txt
             exit 1
