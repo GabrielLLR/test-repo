@@ -145,6 +145,7 @@ jobs:
             }')
           echo "$ISSUE_PAYLOAD"
           echo "📝 Criando issue no Jira..."
+          curl --version
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
