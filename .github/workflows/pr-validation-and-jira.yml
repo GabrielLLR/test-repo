@@ -1,7 +1,7 @@
 name: Validate PR and Create Jira Task
 
 on:
-  pull_request:
+  pull_request_target:  # Executa no repositório original, permitindo acesso às secrets
     types:
       - opened
       - synchronize
@@ -12,12 +12,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do Código do PR (com submódulos)
+      # 1️⃣ Checkout do repositório original (para acessar secrets)
+      - name: Checkout do repositório original
         uses: actions/checkout@v4
         with:
-          submodules: true
+          repository: ${{ github.event.pull_request.base.repo.full_name }}  # Código base
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2️⃣ Checkout do código atualizado do PR (fork)
+      - name: Checkout do código do PR (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}  # Código do PR do fork
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          submodules: true
 
       - name: Garantir que os Submódulos Estão Atualizados
         run: git submodule update --init --recursive
@@ -100,21 +110,6 @@ jobs:
             mkdir -p rules/styles
           fi
 
-      - name: Rodar Vale CLI e gerar relatório usando `rules/.vale.ini`
-        run: |
-          if [ ! -f "swagger.yaml" ]; then
-            echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
-            exit 1
-          fi
-
-          if [ ! -f "rules/.vale.ini" ]; then
-            echo "❌ Arquivo de configuração .vale.ini não encontrado!"
-            exit 1
-          fi
-
-          echo "✅ Arquivo encontrado: swagger.yaml"
-          vale --config rules/.vale.ini "swagger.yaml" > vale_report.txt || true
-
       - name: Criar Task no Jira
         id: create-jira-task
         env:
@@ -131,7 +126,7 @@ jobs:
           DESCRIPTION=$(echo "Revisão do PR: $PR_TITLE. Link do PR: $PR_URL Criado por: $PR_AUTHOR" | jq -R .)
 
           ISSUE_PAYLOAD=$(jq -n \
-            --arg project "EOF" \
+            --arg project "$JIRA_PROJECT" \
             --arg summary "Revisão do PR: $PR_TITLE" \
             --arg description "$DESCRIPTION" \
             --arg issuetype "$JIRA_ISSUE_TYPE" \
@@ -143,9 +138,9 @@ jobs:
                 issuetype: { name: $issuetype }
               }
             }')
+
           echo "$ISSUE_PAYLOAD"
           echo "📝 Criando issue no Jira..."
-          curl --version
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
