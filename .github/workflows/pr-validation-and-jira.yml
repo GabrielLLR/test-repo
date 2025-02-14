@@ -134,7 +134,7 @@ jobs:
           fi
 
           echo "✅ Arquivo encontrado: swagger.yaml"
-          spectral lint swagger.yaml --ruleset @stoplight/spectral-rulesets/oas > spectral_report.txt || {
+          spectral lint swagger.yaml --ruleset oas > spectral_report.txt || {
             echo "❌ Erro ao executar Spectral. Veja detalhes abaixo:"
             cat spectral_report.txt
             exit 1
