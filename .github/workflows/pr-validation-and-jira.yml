@@ -131,7 +131,7 @@ jobs:
           DESCRIPTION=$(echo "Revisão do PR: $PR_TITLE. Link do PR: $PR_URL Criado por: $PR_AUTHOR" | jq -R .)
 
           ISSUE_PAYLOAD=$(jq -n \
-            --arg project "$JIRA_PROJECT" \
+            --arg project "EOF" \
             --arg summary "Revisão do PR: $PR_TITLE" \
             --arg description "$DESCRIPTION" \
             --arg issuetype "$JIRA_ISSUE_TYPE" \
