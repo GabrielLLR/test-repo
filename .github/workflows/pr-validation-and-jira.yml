@@ -82,21 +82,22 @@ jobs:
 
       - name: Rodar PB33F e gerar relatório
         run: |
-          SWAGGER_FILE=$(find $(pwd) -name "swagger.yaml" | head -n 1)
+          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
           if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
           fi
 
           echo "✅ Arquivo encontrado: $SWAGGER_FILE"
-          go run scripts/validate.go "$SWAGGER_FILE" > pb33f_report.txt
+          cd $(dirname "$SWAGGER_FILE")  # Entra no diretório do arquivo
+          go run ../../scripts/validate.go "$(basename "$SWAGGER_FILE")" > ../../pb33f_report.txt
 
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
 
       - name: Rodar Spectral e gerar relatório
         run: |
-          SWAGGER_FILE=$(find $(pwd) -name "swagger.yaml" | head -n 1)
+          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
           if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
@@ -112,7 +113,7 @@ jobs:
 
       - name: Rodar Vale CLI e gerar relatório
         run: |
-          SWAGGER_FILE=$(find $(pwd) -name "swagger.yaml" | head -n 1)
+          SWAGGER_FILE=$(realpath "swagger.yaml" 2>/dev/null || echo "")
           if [[ -z "$SWAGGER_FILE" || ! -f "$SWAGGER_FILE" ]]; then
             echo "❌ Arquivo swagger.yaml não encontrado!"
             exit 1
@@ -129,4 +130,3 @@ jobs:
             pb33f_report.txt
             spectral_report.txt
             vale_report.txt
-
