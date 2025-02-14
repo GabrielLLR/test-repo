@@ -67,14 +67,14 @@ jobs:
       - name: Instalar Spectral para validação OpenAPI
         run: npm install -g @stoplight/spectral-cli
 
-      - name: Rodar Spectral e gerar relatório usando `rules/spectral-ruleset.yaml` (sem falhar o workflow)
+      - name: Rodar Spectral e gerar relatório usando `rules/spectral_rules.yaml` (sem falhar o workflow)
         run: |
           if [ ! -f "swagger.yaml" ]; then
             echo "❌ Arquivo swagger.yaml não encontrado na versão do PR!"
             exit 1
           fi
 
-          if [ ! -f "rules/spectral-ruleset.yaml" ]; then
+          if [ ! -f "rules/spectral_rules.yaml" ]; then
             echo "❌ Arquivo de regras do Spectral não encontrado!"
             exit 1
           fi
@@ -82,7 +82,7 @@ jobs:
           echo "✅ Arquivo encontrado: swagger.yaml"
           
           # Executa o Spectral e captura os warnings e erros no relatório sem falhar o workflow
-          spectral lint swagger.yaml --ruleset rules/spectral-ruleset.yaml > spectral_report.txt 2>&1 || true
+          spectral lint swagger.yaml --ruleset rules/spectral_rules.yaml > spectral_report.txt 2>&1 || true
 
           echo "✅ Spectral finalizado com sucesso! Erros e warnings foram salvos no relatório."
 
