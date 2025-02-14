@@ -7,13 +7,28 @@ jobs:
   jira:
     runs-on: ubuntu-latest
     steps:
+      - name: Validar Secrets Necessárias
+        run: |
+          REQUIRED_SECRETS=("JIRA_URL" "JIRA_USER" "JIRA_API_TOKEN" "JIRA_PROJECT")
+          MISSING_SECRETS=()
+          for SECRET in "${REQUIRED_SECRETS[@]}"; do
+            if [[ -z "${{ secrets[SECRET] }}" ]]; then
+              MISSING_SECRETS+=("$SECRET")
+            fi
+          done
+          if [[ ${#MISSING_SECRETS[@]} -ne 0 ]]; then
+            echo "❌ As seguintes secrets estão ausentes: ${MISSING_SECRETS[*]}"
+            exit 1
+          fi
+          echo "✅ Todas as secrets obrigatórias estão definidas."
+
       - name: Criar Task no Jira
         id: create-jira-task
         env:
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_USER: ${{ secrets.JIRA_USER }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT: "EOF"
+          JIRA_PROJECT: ${{ secrets.JIRA_PROJECT }}
           JIRA_ISSUE_TYPE: "Task"
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
