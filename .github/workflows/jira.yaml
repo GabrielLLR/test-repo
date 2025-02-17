@@ -55,12 +55,39 @@ jobs:
 
           echo "Resposta da API: $RESPONSE"
 
+          ISSUE_ID=$(echo "$RESPONSE" | jq -r '.id')
           ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key')
 
-          if [[ "$ISSUE_KEY" == "null" || -z "$ISSUE_KEY" ]]; then
+          if [[ "$ISSUE_ID" == "null" || -z "$ISSUE_ID" ]]; then
             echo "❌ Erro ao criar issue no Jira!"
             exit 1
           fi
 
+          echo "JIRA_ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
           echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
-          echo "✅ Tarefa Jira criada: $ISSUE_KEY"
+          echo "✅ Tarefa Jira criada: $ISSUE_KEY (ID: $ISSUE_ID)"
+
+      - name: Mudar status da Task para "Em Andamento"
+        run: |
+          echo "🔄 Buscando ID da transição para 'Em Andamento'..."
+          TRANSITIONS=$(curl -s -X GET -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            "$JIRA_URL/rest/api/2/issue/$JIRA_ISSUE_ID/transitions")
+
+          echo "Resposta da API (Transições): $TRANSITIONS"
+
+          TRANSITION_ID=$(echo "$TRANSITIONS" | jq -r '.transitions[] | select(.name=="Em Andamento") | .id')
+
+          if [[ -z "$TRANSITION_ID" || "$TRANSITION_ID" == "null" ]]; then
+            echo "❌ Não foi possível encontrar a transição para 'Em Andamento'."
+            exit 1
+          fi
+
+          echo "🔄 Executando transição para 'Em Andamento'..."
+          TRANSITION_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+            -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            --data "{\"transition\": {\"id\": \"$TRANSITION_ID\"}}" \
+            "$JIRA_URL/rest/api/2/issue/$JIRA_ISSUE_ID/transitions")
+
+          echo "Resposta da API (Transição): $TRANSITION_RESPONSE"
+          echo "✅ Status da Task atualizado para 'Em Andamento'."
