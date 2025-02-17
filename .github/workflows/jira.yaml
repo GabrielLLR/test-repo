@@ -64,7 +64,6 @@ jobs:
           fi
 
           echo "JIRA_ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
-          echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
           echo "✅ Tarefa Jira criada: $ISSUE_KEY (ID: $ISSUE_ID)"
 
       - name: Mudar status da Task para "Em Andamento"
