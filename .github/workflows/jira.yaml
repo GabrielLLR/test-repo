@@ -68,6 +68,8 @@ jobs:
           echo "✅ Tarefa Jira criada: $ISSUE_KEY (ID: $ISSUE_ID)"
 
       - name: Mudar status da Task para "Em Andamento"
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
         run: |
           echo "🔄 Executando transição para 'Em Andamento' com ID 31..."
           echo "JIRA_URL: '$JIRA_URL'"
