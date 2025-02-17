@@ -70,10 +70,19 @@ jobs:
       - name: Mudar status da Task para "Em Andamento"
         run: |
           echo "🔄 Executando transição para 'Em Andamento' com ID 31..."
+          TRANSITION_PAYLOAD='{"transition": {"id": "31"}}'
+          echo "Payload enviado: $TRANSITION_PAYLOAD"
+          
           TRANSITION_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
-            --data "{\"transition\": {\"id\": \"31\"}}" \
+            --data "$TRANSITION_PAYLOAD" \
             "$JIRA_URL/rest/api/2/issue/$JIRA_ISSUE_ID/transitions")
 
           echo "Resposta da API (Transição): $TRANSITION_RESPONSE"
+
+          if [[ "$TRANSITION_RESPONSE" == *"errorMessages"* ]]; then
+            echo "❌ Erro ao atualizar status da Task!"
+            exit 1
+          fi
+
           echo "✅ Status da Task atualizado para 'Em Andamento'."
