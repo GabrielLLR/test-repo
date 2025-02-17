@@ -64,18 +64,34 @@ jobs:
           fi
 
           echo "JIRA_ISSUE_ID=$ISSUE_ID" >> $GITHUB_ENV
+          echo "JIRA_ISSUE_KEY=$ISSUE_KEY" >> $GITHUB_ENV
           echo "✅ Tarefa Jira criada: $ISSUE_KEY (ID: $ISSUE_ID)"
 
       - name: Mudar status da Task para "Em Andamento"
         run: |
           echo "🔄 Executando transição para 'Em Andamento' com ID 31..."
+          echo "JIRA_URL: '$JIRA_URL'"
+          echo "JIRA_ISSUE_ID: '$JIRA_ISSUE_ID'"
+
+          if [[ -z "$JIRA_URL" ]]; then
+            echo "❌ ERRO: JIRA_URL não está definido!"
+            exit 1
+          fi
+
+          if [[ -z "$JIRA_ISSUE_ID" ]]; then
+            echo "❌ ERRO: JIRA_ISSUE_ID não está definido!"
+            exit 1
+          fi
+
           TRANSITION_PAYLOAD='{"transition": {"id": "31"}}'
           echo "Payload enviado: $TRANSITION_PAYLOAD"
-          
-          TRANSITION_RESPONSE=$(curl -X POST -H "Content-Type: application/json" \
+
+          set -x  # Ativar debug
+          TRANSITION_RESPONSE=$(curl -v -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$TRANSITION_PAYLOAD" \
             "$JIRA_URL/rest/api/2/issue/$JIRA_ISSUE_ID/transitions")
+          set +x  # Desativar debug
 
           echo "Resposta da API (Transição): $TRANSITION_RESPONSE"
 
