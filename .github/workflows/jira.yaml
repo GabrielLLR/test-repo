@@ -46,17 +46,19 @@ jobs:
             --arg issuetype "$JIRA_ISSUE_TYPE" \
             '{ fields: { project: { key: $project }, summary: $summary, description: $description | fromjson, issuetype: { name: $issuetype } } }')
 
-          echo "$ISSUE_PAYLOAD"
           echo "📝 Criando issue no Jira..."
+          echo "Payload enviado: $ISSUE_PAYLOAD"
+
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
             -u "$JIRA_USER:$JIRA_API_TOKEN" \
             --data "$ISSUE_PAYLOAD" "$JIRA_URL/rest/api/2/issue/")
+
+          echo "Resposta da API: $RESPONSE"
 
           ISSUE_KEY=$(echo "$RESPONSE" | jq -r '.key')
 
           if [[ "$ISSUE_KEY" == "null" || -z "$ISSUE_KEY" ]]; then
             echo "❌ Erro ao criar issue no Jira!"
-            echo "Resposta da API: $RESPONSE"
             exit 1
           fi
 
